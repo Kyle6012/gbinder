@@ -11,7 +11,7 @@ GBINDER_TAG  = "v1.1.30"  # adjust to a real tag or branch
 
 class build_ext(_build_ext):
     def run(self):
-        if not self._has_pkgconfig("gbinder"):
+        if not self._has_pkgconfig("libgbinder"):
             self.announce("⚙️  libgbinder not found; cloning & building…", level=2)
             self._vendor_and_build()
         super().run()
