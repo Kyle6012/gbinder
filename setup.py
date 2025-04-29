@@ -8,7 +8,7 @@ from setuptools.command.build_ext import build_ext as _build_ext
 
 # Git URL & tag/branch for libgbinder
 GBINDER_REPO = "https://github.com/mer-hybris/libgbinder.git"
-GBINDER_TAG = "v1.1.42"  
+GBINDER_TAG = "v1.1.30"
 
 class build_ext(_build_ext):
     """Custom build_ext that vendors & builds libgbinder if pkg-config fails."""
@@ -32,7 +32,11 @@ class build_ext(_build_ext):
         self.announce(f"🗂 Cloning {GBINDER_REPO}@{GBINDER_TAG} into {src_dir}", level=2)
         # clone only that tag
         from git import Repo
-        Repo.clone_from(GBINDER_REPO, src_dir, branch=GBINDER_TAG, depth=1)
+	try:
+            Repo.clone_from(GBINDER_REPO, src_dir, branch=self.GBINDER_TAG, depth=1)
+	except GitCommandError:
+	    self.announce(f"⚠️ tag {self.GBINDER_TAG!r} not found, cloning default branch", level=2)
+	    Repo.clone_from(GBINDER_REPO, src_dir, depth=1)
 
         build_dir = os.path.join(src_dir, "build")
         os.makedirs(build_dir, exist_ok=True)
