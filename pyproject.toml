@@ -1,9 +1,11 @@
 [build-system]
 requires = [
-    "setuptools >= 42",
+    "setuptools>=42",
     "wheel",
-    "cython",
-    "pkgconfig"
+    "Cython>=0.29",
+    "gitpython>=3.1",
+    "pkgconfig",
+    "meson-python>=0.13.0"
 ]
 build-backend = "setuptools.build_meta"
 
@@ -11,27 +13,21 @@ build-backend = "setuptools.build_meta"
 name = "gbinder"
 version = "1.2.1"
 description = "Cython extension module for C++ gbinder functions"
+readme = "README.md"
+requires-python = ">=3.6"
+license = { file = "LICENSE" }
 authors = [
     { name="Erfan Abdi", email="erfangplus@gmail.com" }
 ]
 maintainers = [
     { name="Meshack Bahati", email="bahatikylemeshack@gmail.com" }
 ]
-license = { file = "LICENSE" }
-readme = "README.md"
-requires-python = ">=3.6"
 keywords = ["Cython", "C++", "gbinder", "extension module"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Cython",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent"
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "tox"
 ]
 
 [project.urls]
