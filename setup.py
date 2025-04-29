@@ -11,11 +11,9 @@ GBINDER_TAG  = "v1.1.30"  # adjust to a real tag or branch
 
 class build_ext(_build_ext):
     def run(self):
-        # 1. If pkg-config can see libgbinder, skip vendoring
-        if not self._has_pkgconfig("libgbinder"):
-            self.announce("⚙️  libgbinder not found on system; cloning & building…", level=2)
+        if not self._has_pkgconfig("gbinder"):
+            self.announce("⚙️  libgbinder not found; cloning & building…", level=2)
             self._vendor_and_build()
-        # 2. Proceed with normal ext build
         super().run()
 
     def _has_pkgconfig(self, name: str) -> bool:
@@ -30,7 +28,7 @@ class build_ext(_build_ext):
         src    = os.path.join(tmpdir, "libgbinder")
         install_prefix = os.path.join(tmpdir, "install")
 
-        # Clone with tag fallback
+        # 1) Clone upstream, fallback to default branch if tag missing
         from git import Repo, GitCommandError
         try:
             Repo.clone_from(GBINDER_REPO, src, branch=GBINDER_TAG, depth=1)
@@ -38,74 +36,39 @@ class build_ext(_build_ext):
             self.announce(f"⚠️ Tag '{GBINDER_TAG}' not found; cloning default branch", level=2)
             Repo.clone_from(GBINDER_REPO, src, depth=1)
 
-        # Autodetect build system
-        if os.path.exists(os.path.join(src, "meson.build")):
-            self._build_meson(src, install_prefix)
-        elif os.path.exists(os.path.join(src, "configure")) or os.path.exists(os.path.join(src, "configure.ac")):
-            self._build_autotools(src, install_prefix)
-        elif os.path.exists(os.path.join(src, "CMakeLists.txt")):
-            self._build_cmake(src, install_prefix)
-        else:
-            raise RuntimeError(
-                "Unknown build system in libgbinder: "
-                "no meson.build, configure(.ac), or CMakeLists.txt found."
-            )
+        # 2) Verify Makefile exists
+        makefile = os.path.join(src, "Makefile")
+        if not os.path.exists(makefile):
+            raise RuntimeError("No Makefile found in libgbinder repo – cannot build.")
 
-        # Point pkg-config at our vendored install
-        pcdir = os.path.join(install_prefix, "usr", "lib", "pkgconfig")
-        os.environ["PKG_CONFIG_PATH"] = pcdir + os.pathsep + os.environ.get("PKG_CONFIG_PATH", "")
+        # 3) Build & install via Makefile
+        env = os.environ.copy()
+        env["DESTDIR"] = install_prefix
 
-    def _build_meson(self, src, prefix):
-        bld = os.path.join(src, "build-meson")
-        os.makedirs(bld, exist_ok=True)
-        self.announce("🔨 Meson: configure…", level=2)
-        subprocess.check_call(["meson", src, bld, "--prefix=/usr"])
-        self.announce("🏗 Meson: build…", level=2)
-        subprocess.check_call(["ninja", "-C", bld])
-        self.announce("📦 Meson: install…", level=2)
-        subprocess.check_call(["ninja", "-C", bld, "install", f"--destdir={prefix}"])
+        # Build everything (debug + release + pkgconfig)
+        self.announce("🏗 Running make all…", level=2)
+        subprocess.check_call(["make", "all"], cwd=src, env=env)
 
-    def _build_autotools(self, src, prefix):
-        cwd = os.getcwd()
-        os.chdir(src)
-        try:
-            self.announce("🔧 Autotools: autoreconf…", level=2)
-            if os.path.exists("configure.ac") and not os.path.exists("configure"):
-                subprocess.check_call(["autoreconf", "-fi"])
-            self.announce("🏗 Autotools: configure…", level=2)
-            subprocess.check_call(["./configure", "--prefix=/usr"])
-            self.announce("🏗 Autotools: build…", level=2)
-            subprocess.check_call(["make", "-j"])
-            self.announce("📦 Autotools: install…", level=2)
-            subprocess.check_call(["make", f"DESTDIR={prefix}", "install"])
-        finally:
-            os.chdir(cwd)
+        # Install runtime libs
+        self.announce("📦 Running make install…", level=2)
+        subprocess.check_call(["make", "install"], cwd=src, env=env)
 
-    def _build_cmake(self, src, prefix):
-        bld = os.path.join(src, "build-cmake")
-        os.makedirs(bld, exist_ok=True)
-        self.announce("🔨 CMake: configure…", level=2)
-        subprocess.check_call([
-            "cmake", "-S", src, "-B", bld,
-            "-DCMAKE_INSTALL_PREFIX=/usr"
-        ])
-        self.announce("🏗 CMake: build…", level=2)
-        subprocess.check_call(["cmake", "--build", bld, "--", "-j"])
-        self.announce("📦 CMake: install…", level=2)
-        subprocess.check_call([
-            "cmake", "--install", bld,
-            "--prefix", "/usr", "--root", prefix
-        ])
+        # Install headers & pkg-config file
+        self.announce("📦 Running make install-dev…", level=2)
+        subprocess.check_call(["make", "install-dev"], cwd=src, env=env)
+
+        # 4) Point pkg-config at our vendored build
+        pc_dir = os.path.join(install_prefix, "usr", "lib", "pkgconfig")
+        os.environ["PKG_CONFIG_PATH"] = pc_dir + os.pathsep + os.environ.get("PKG_CONFIG_PATH", "")
 
     def build_extensions(self):
-        # Reload each Extension’s include/library paths now that PKG_CONFIG_PATH is set
+        # Reconfigure include/lib paths now that PKG_CONFIG_PATH is set
         self.extensions = [_reconfigure(ext) for ext in self.extensions]
         super().build_extensions()
 
 
-def _reconfigure(ext):
-    cfg = {'sources': ext.sources}
-    flags = subprocess.getoutput("pkg-config --cflags --libs libgbinder").split()
+def _reconfigure(ext: Extension) -> Extension:
+    flags = subprocess.getoutput("pkg-config --cflags --libs gbinder").split()
     for tok in flags:
         if tok.startswith("-I"):
             ext.include_dirs.append(tok[2:])
@@ -131,7 +94,7 @@ if USE_CYTHON:
 
 setup(
     name="gbinder",
-    version="1.2.5",  
+    version="1.2.7",
     description="Cython extension module for C++ gbinder functions",
     author="Erfan Abdi",
     author_email="erfangplus@gmail.com",
