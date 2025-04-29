@@ -92,7 +92,7 @@ if USE_CYTHON:
 
 setup(
     name="gbinder",
-    version="1.2.1",
+    version="1.2.2",
     description="Cython extension module for C++ gbinder functions",
     author="Erfan Abdi",
     author_email="erfangplus@gmail.com",
